@@ -16,7 +16,7 @@ class FolderController extends ApiController
                 $query->where('name', 'like', "%{$request->search}%");
             })
             ->with('children')
-            ->paginate(10)
+            ->paginate(10);
 
         return $this->successResponse($folders, "Folders fetched successfully");
     }
