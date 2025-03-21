@@ -8,7 +8,7 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-
+Route::apiResource('folders', FolderController::class);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/folders', [FolderController::class, 'index']);
     Route::post('/folders', [FolderController::class, 'store']);
