@@ -1,48 +1,69 @@
 <?php
-
 namespace App\Http\Controllers;
 
+use App\Http\Requests\FolderRequest;
+use App\Http\Resources\FolderResource;
+use App\Models\Folder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
-class FolderController extends Controller
+class FolderController extends ApiController
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $folders = Folder::where('user_id', auth()->id())
+            ->when($request->search, function ($query) use ($request) {
+                $query->where('name', 'like', "%{$request->search}%");
+            })
+            ->with('children')
+            ->paginate(10);
+
+        return $this->successResponse($folders, "Folders fetched successfully");
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function store(FolderRequest $request)
     {
-        //
+        $data = $request->validated();
+        $data['user_id'] = auth()->id();
+
+        if ($request->hasFile('icon')) {
+            $data['icon'] = $request->file('icon')->store('icons', 'public');
+        }
+
+        $folder = Folder::create($data);
+        return $this->successResponse(new FolderResource($folder), "Folder created successfully");
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function update(FolderRequest $request, Folder $folder)
     {
-        //
+        if ($folder->user_id !== auth()->id()) {
+            return $this->errorResponse("Unauthorized", 403);
+        }
+
+        $data = $request->validated();
+
+        if ($request->hasFile('icon')) {
+            if ($folder->icon) {
+                Storage::disk('public')->delete($folder->icon);
+            }
+            $data['icon'] = $request->file('icon')->store('icons', 'public');
+        }
+
+        $folder->update($data);
+        return $this->successResponse(new FolderResource($folder), "Folder updated successfully");
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function destroy(Folder $folder)
     {
-        //
-    }
+        if ($folder->user_id !== auth()->id()) {
+            return $this->errorResponse("Unauthorized", 403);
+        }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        if ($folder->icon) {
+            Storage::disk('public')->delete($folder->icon);
+        }
+
+        $folder->delete();
+        return $this->successResponse(null, "Folder deleted successfully");
     }
 }
