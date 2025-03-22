@@ -1,69 +1,107 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\FolderRequest;
 use App\Http\Resources\FolderResource;
 use App\Models\Folder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
-class FolderController extends ApiController
+class FolderController extends Controller
+
 {
-    public function index(Request $request)
+    protected function sendResponse($result, $message): JsonResponse
     {
-        $folders = Folder::where('user_id', auth()->id())
-            ->when($request->search, function ($query) use ($request) {
-                $query->where('name', 'like', "%{$request->search}%");
-            })
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => $message
+        ], 200);
+    }
+
+    protected function sendError($message, $code = 400): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message
+        ], $code);
+    }
+
+    public function index()
+    {
+        $folders = Folder::where('user_id', Auth::id())
+            ->whereNull('parent_id')
             ->with('children')
             ->paginate(10);
-
-        return $this->successResponse($folders, "Folders fetched successfully");
+        
+        return $this->sendResponse(FolderResource::collection($folders), 'Folders retrieved successfully.');
     }
 
     public function store(FolderRequest $request)
     {
-        $data = $request->validated();
-        $data['user_id'] = auth()->id();
-
+        $data = $request->only('name', 'parent_id');
+        $data['user_id'] = Auth::id();
+        
         if ($request->hasFile('icon')) {
-            $data['icon'] = $request->file('icon')->store('icons', 'public');
+            $data['icon'] = $request->file('icon')->store('folder_icons', 'public');
         }
 
         $folder = Folder::create($data);
-        return $this->successResponse(new FolderResource($folder), "Folder created successfully");
+        return $this->sendResponse(new FolderResource($folder), 'Folder created successfully.');
     }
 
-    public function update(FolderRequest $request, Folder $folder)
+    public function show($id)
     {
-        if ($folder->user_id !== auth()->id()) {
-            return $this->errorResponse("Unauthorized", 403);
+        $folder = Folder::where('user_id', Auth::id())
+            ->with('children')
+            ->find($id);
+        
+        if (!$folder) {
+            return $this->sendError('Folder not found.', 404);
+        }
+        
+        return $this->sendResponse(new FolderResource($folder), 'Folder retrieved successfully.');
+    }
+
+    public function update(FolderRequest $request, $id)
+    {
+        $folder = Folder::where('user_id', Auth::id())->find($id);
+        if (!$folder) {
+            return $this->sendError('Folder not found.', 404);
         }
 
-        $data = $request->validated();
+        $folder->update($request->only('name', 'parent_id'));
 
         if ($request->hasFile('icon')) {
-            if ($folder->icon) {
-                Storage::disk('public')->delete($folder->icon);
-            }
-            $data['icon'] = $request->file('icon')->store('icons', 'public');
+            $folder->icon = $request->file('icon')->store('folder_icons', 'public');
+            $folder->save();
         }
 
-        $folder->update($data);
-        return $this->successResponse(new FolderResource($folder), "Folder updated successfully");
+        return $this->sendResponse(new FolderResource($folder), 'Folder updated successfully.');
     }
 
-    public function destroy(Folder $folder)
+    public function destroy($id)
     {
-        if ($folder->user_id !== auth()->id()) {
-            return $this->errorResponse("Unauthorized", 403);
-        }
-
-        if ($folder->icon) {
-            Storage::disk('public')->delete($folder->icon);
+        $folder = Folder::where('user_id', Auth::id())->find($id);
+        if (!$folder) {
+            return $this->sendError('Folder not found.', 404);
         }
 
         $folder->delete();
-        return $this->successResponse(null, "Folder deleted successfully");
+        return $this->sendResponse([], 'Folder deleted successfully.');
+    }
+
+    public function search(Request $request)
+    {
+        $query = Folder::where('user_id', Auth::id());
+
+        if ($request->has('name')) {
+            $query->where('name', 'like', '%' . $request->name . '%');
+        }
+
+        $folders = $query->paginate(10);
+        return $this->sendResponse(FolderResource::collection($folders), 'Folders filtered successfully.');
     }
 }
