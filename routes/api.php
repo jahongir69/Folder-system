@@ -15,3 +15,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/folders/{folder}', [FolderController::class, 'update']);
     Route::delete('/folders/{folder}', [FolderController::class, 'destroy']);
 });
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('folders', FolderController::class);
+    Route::get('folders/search', [FolderController::class, 'search']);
+});

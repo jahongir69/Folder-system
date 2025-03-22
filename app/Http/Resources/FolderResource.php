@@ -12,10 +12,11 @@ class FolderResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'icon' => $this->icon ? asset('storage/' . $this->icon) : null,
+            'icon' => $this->icon ? asset('storage/' . $this->icon) : null, 
             'parent_id' => $this->parent_id,
-            'children' => FolderResource::collection($this->whenLoaded('children')),
             'created_at' => $this->created_at->toDateTimeString(),
+            'updated_at' => $this->updated_at->toDateTimeString(),
+            'children' => FolderResource::collection($this->whenLoaded('children')) 
         ];
     }
 }
